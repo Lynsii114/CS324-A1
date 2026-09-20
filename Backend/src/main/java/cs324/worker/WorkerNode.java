@@ -46,6 +46,15 @@ public class WorkerNode extends UnicastRemoteObject implements WorkerService {
     }
 
     @Override
+    public void addNeighbour(WorkerInfo worker) {
+        if (worker == null || worker.getId() == workerId || neighbours.contains(worker)) {
+            return;
+        }
+
+        neighbours.add(worker);
+    }
+
+    @Override
     public int getCurrentCoordinatorId() {
         return currentCoordinatorId;
     }
@@ -76,6 +85,15 @@ public class WorkerNode extends UnicastRemoteObject implements WorkerService {
         BootstrapService bootstrap = (BootstrapService) bootstrapRegistry.lookup(bootstrapBindingName);
 
         WorkerInfo workerInfo = new WorkerInfo(workerId, "localhost", workerPort);
+        WorkerInfo neighbourInfo = bootstrap.getRandomActiveWorker();
+        if (neighbourInfo != null && neighbourInfo.getId() != workerId) {
+            workerNode.addNeighbour(neighbourInfo);
+
+            Registry neighbourRegistry = LocateRegistry.getRegistry(neighbourInfo.getHost(), neighbourInfo.getPort());
+            WorkerService neighbour = (WorkerService) neighbourRegistry.lookup("Worker-" + neighbourInfo.getId());
+            neighbour.addNeighbour(workerInfo);
+        }
+
         bootstrap.registerWorker(workerInfo);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
@@ -92,6 +110,7 @@ public class WorkerNode extends UnicastRemoteObject implements WorkerService {
                 workerNode.getJobAllocationCounter(),
                 workerNode.getCurrentCoordinatorId(),
                 workerNode.getLeaderman());
+        System.out.println("Neighbours=" + workerNode.getNeighbours());
         System.out.println("Press Ctrl+C to stop.");
 
         Thread.currentThread().join();

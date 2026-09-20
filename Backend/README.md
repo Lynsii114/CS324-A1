@@ -23,7 +23,7 @@ Each Worker Node runs as its own Java process. A worker has:
 - current coordinator ID, initialized to its own worker ID
 - `leaderman`, initialized to `"cs324"`
 
-When a worker starts, it exports itself over RMI and registers with the Bootstrap Node. Leader election is not implemented yet.
+When a worker starts, it exports itself over RMI, asks the Bootstrap Node for a randomly selected active worker, connects to that worker as a neighbour, updates both workers with the neighbour relationship, and then registers itself with the Bootstrap Node. Leader election is not implemented yet.
 
 ## Compile
 
@@ -109,4 +109,19 @@ Inspect that worker from a third terminal:
 java -cp Backend/out cs324.worker.WorkerTestClient localhost 5001 1
 ```
 
-You should see the worker ID, `JAC` as `0`, an empty neighbour list, the current coordinator ID, and `leaderman` as `cs324`.
+You should see the worker ID, `JAC` as `0`, its neighbour list, the current coordinator ID, and `leaderman` as `cs324`.
+
+To test neighbour creation, run a second worker while the first worker is still running:
+
+```powershell
+java -cp Backend/out cs324.worker.WorkerNode 2 5002
+```
+
+Then inspect both workers:
+
+```powershell
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5001 1
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5002 2
+```
+
+Worker `1` should list worker `2` as a neighbour, and worker `2` should list worker `1` as a neighbour. Each worker only stores its own direct neighbours.

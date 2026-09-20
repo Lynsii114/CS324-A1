@@ -13,6 +13,8 @@ public interface WorkerService extends Remote {
 
     List<WorkerInfo> getNeighbours() throws RemoteException;
 
+    void addNeighbour(WorkerInfo worker) throws RemoteException;
+
     int getCurrentCoordinatorId() throws RemoteException;
 
     String getLeaderman() throws RemoteException;

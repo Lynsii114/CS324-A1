@@ -21,6 +21,7 @@ public final class BootstrapTestClient {
         System.out.println("Active workers: " + bootstrap.getActiveWorkers());
         System.out.println("Random worker: " + bootstrap.getRandomActiveWorker());
         System.out.println("Unregistered test worker 9001: " + bootstrap.unregisterWorker(9001));
+        System.out.println("Unregistered test worker 9002: " + bootstrap.unregisterWorker(9002));
         System.out.println("Active workers after unregister: " + bootstrap.getActiveWorkers());
     }
 }
