@@ -11,15 +11,25 @@ public final class WorkerTestClient {
         String host = args.length >= 1 ? args[0] : "localhost";
         int port = args.length >= 2 ? Integer.parseInt(args[1]) : 5001;
         int workerId = args.length >= 3 ? Integer.parseInt(args[2]) : 1;
+        String command = args.length >= 4 ? args[3] : "status";
         String bindingName = "Worker-" + workerId;
 
         Registry registry = LocateRegistry.getRegistry(host, port);
         WorkerService worker = (WorkerService) registry.lookup(bindingName);
 
+        if ("no-coordinator".equalsIgnoreCase(command)) {
+            worker.markCoordinatorUnavailable();
+            System.out.println("Marked coordinator unavailable on worker " + workerId);
+        } else if ("election".equalsIgnoreCase(command)) {
+            ElectionResult result = worker.startElection();
+            System.out.println("Election result: " + result);
+        }
+
         System.out.println("Worker ID: " + worker.getWorkerId());
         System.out.println("JAC: " + worker.getJobAllocationCounter());
         System.out.println("Neighbours: " + worker.getNeighbours());
         System.out.println("Current coordinator ID: " + worker.getCurrentCoordinatorId());
+        System.out.println("Processed election IDs: " + worker.getProcessedElectionIds());
         System.out.println("leaderman: " + worker.getLeaderman());
     }
 }

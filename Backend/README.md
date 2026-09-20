@@ -23,7 +23,15 @@ Each Worker Node runs as its own Java process. A worker has:
 - current coordinator ID, initialized to its own worker ID
 - `leaderman`, initialized to `"cs324"`
 
-When a worker starts, it exports itself over RMI, asks the Bootstrap Node for a randomly selected active worker, connects to that worker as a neighbour, updates both workers with the neighbour relationship, and then registers itself with the Bootstrap Node. Leader election is not implemented yet.
+When a worker starts, it exports itself over RMI, asks the Bootstrap Node for a randomly selected active worker, connects to that worker as a neighbour, updates both workers with the neighbour relationship, and then registers itself with the Bootstrap Node.
+
+## Leader Election
+
+Any worker can initiate an election when it has no coordinator. The election uses an `ELECTION` message with a unique election ID generated from the initiator ID and a UUID.
+
+Each worker keeps a thread-safe set of processed election IDs. If the same `ELECTION` message reaches a worker more than once, the worker ignores the duplicate so cycles in the unstructured network do not cause repeated processing.
+
+The `ELECTION` message is forwarded only through direct neighbours. The election considers all reachable active workers in that neighbour network, and the reachable worker with the highest worker ID becomes the coordinator. The elected coordinator ID is then announced back through the reachable network.
 
 ## Compile
 
@@ -164,6 +172,32 @@ java -cp Backend/out cs324.worker.WorkerTestClient localhost 5004 4
 java -cp Backend/out cs324.worker.WorkerTestClient localhost 5005 5
 java -cp Backend/out cs324.worker.WorkerTestClient localhost 5006 6
 ```
+
+## Test Leader Election
+
+Start the Bootstrap Node and at least two Worker Nodes.
+
+Mark a worker as having no coordinator:
+
+```powershell
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5001 1 no-coordinator
+```
+
+Start an election from that worker:
+
+```powershell
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5001 1 election
+```
+
+Inspect workers after the election:
+
+```powershell
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5001 1
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5002 2
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5003 3
+```
+
+Each reachable worker should show the same coordinator ID and the same processed election ID.
 
 ## Test Bootstrap Node
 

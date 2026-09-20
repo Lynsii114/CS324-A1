@@ -15,6 +15,18 @@ public interface WorkerService extends Remote {
 
     void addNeighbour(WorkerInfo worker) throws RemoteException;
 
+    ElectionResult startElection() throws RemoteException;
+
+    ElectionResult receiveElection(String electionId, WorkerInfo sender) throws RemoteException;
+
+    void announceCoordinator(String electionId, int coordinatorId) throws RemoteException;
+
+    void receiveCoordinatorAnnouncement(String electionId, int coordinatorId, WorkerInfo sender) throws RemoteException;
+
+    void markCoordinatorUnavailable() throws RemoteException;
+
+    List<String> getProcessedElectionIds() throws RemoteException;
+
     int getCurrentCoordinatorId() throws RemoteException;
 
     String getLeaderman() throws RemoteException;
