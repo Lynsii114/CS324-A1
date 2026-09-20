@@ -82,8 +82,8 @@ public class WorkerNode extends UnicastRemoteObject implements WorkerService {
             return new ElectionResult(electionId, -1, List.of());
         }
 
-        Set<WorkerInfo> reachableWorkers = new HashSet<>();
-        reachableWorkers.add(selfInfo);
+        Set<ElectionCandidate> reachableCandidates = new HashSet<>();
+        reachableCandidates.add(new ElectionCandidate(selfInfo, jobAllocationCounter.get()));
 
         for (WorkerInfo neighbourInfo : neighbours) {
             if (sender != null && neighbourInfo.getId() == sender.getId()) {
@@ -93,7 +93,7 @@ public class WorkerNode extends UnicastRemoteObject implements WorkerService {
             try {
                 WorkerService neighbour = lookupWorker(neighbourInfo);
                 ElectionResult neighbourResult = neighbour.receiveElection(electionId, selfInfo);
-                reachableWorkers.addAll(neighbourResult.getReachableWorkers());
+                reachableCandidates.addAll(neighbourResult.getReachableCandidates());
             } catch (Exception exception) {
                 System.err.printf("Worker %d could not forward election %s to worker %d: %s%n",
                         workerId,
@@ -103,12 +103,13 @@ public class WorkerNode extends UnicastRemoteObject implements WorkerService {
             }
         }
 
-        int coordinatorId = reachableWorkers.stream()
-                .map(WorkerInfo::getId)
-                .max(Comparator.naturalOrder())
+        int coordinatorId = reachableCandidates.stream()
+                .min(Comparator.comparingInt(ElectionCandidate::getJobAllocationCounter)
+                        .thenComparing(Comparator.comparingInt(ElectionCandidate::getWorkerId).reversed()))
+                .map(ElectionCandidate::getWorkerId)
                 .orElse(workerId);
 
-        return new ElectionResult(electionId, coordinatorId, new ArrayList<>(reachableWorkers));
+        return new ElectionResult(electionId, coordinatorId, new ArrayList<>(reachableCandidates));
     }
 
     @Override

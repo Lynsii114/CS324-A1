@@ -31,7 +31,7 @@ Any worker can initiate an election when it has no coordinator. The election use
 
 Each worker keeps a thread-safe set of processed election IDs. If the same `ELECTION` message reaches a worker more than once, the worker ignores the duplicate so cycles in the unstructured network do not cause repeated processing.
 
-The `ELECTION` message is forwarded only through direct neighbours. The election considers all reachable active workers in that neighbour network, and the reachable worker with the highest worker ID becomes the coordinator. The elected coordinator ID is then announced back through the reachable network.
+The `ELECTION` message is forwarded only through direct neighbours. The election considers all reachable active workers in that neighbour network before selecting a winner. The reachable worker with the lowest Job Allocation Counter (JAC) becomes the coordinator. If two or more reachable workers have the same lowest JAC, the worker with the highest worker ID wins. The elected coordinator ID is then announced back through the reachable network.
 
 ## Compile
 

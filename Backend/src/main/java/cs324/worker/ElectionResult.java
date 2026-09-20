@@ -10,12 +10,12 @@ public final class ElectionResult implements Serializable {
 
     private final String electionId;
     private final int coordinatorId;
-    private final List<WorkerInfo> reachableWorkers;
+    private final List<ElectionCandidate> reachableCandidates;
 
-    public ElectionResult(String electionId, int coordinatorId, List<WorkerInfo> reachableWorkers) {
+    public ElectionResult(String electionId, int coordinatorId, List<ElectionCandidate> reachableCandidates) {
         this.electionId = electionId;
         this.coordinatorId = coordinatorId;
-        this.reachableWorkers = List.copyOf(reachableWorkers);
+        this.reachableCandidates = List.copyOf(reachableCandidates);
     }
 
     public String getElectionId() {
@@ -26,8 +26,14 @@ public final class ElectionResult implements Serializable {
         return coordinatorId;
     }
 
+    public List<ElectionCandidate> getReachableCandidates() {
+        return reachableCandidates;
+    }
+
     public List<WorkerInfo> getReachableWorkers() {
-        return reachableWorkers;
+        return reachableCandidates.stream()
+                .map(ElectionCandidate::getWorkerInfo)
+                .toList();
     }
 
     @Override
@@ -35,7 +41,7 @@ public final class ElectionResult implements Serializable {
         return "ElectionResult{"
                 + "electionId='" + electionId + '\''
                 + ", coordinatorId=" + coordinatorId
-                + ", reachableWorkers=" + reachableWorkers
+                + ", reachableCandidates=" + reachableCandidates
                 + '}';
     }
 }
