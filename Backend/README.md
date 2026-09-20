@@ -73,6 +73,98 @@ Example with a custom Bootstrap Node:
 java -cp Backend/out cs324.worker.WorkerNode 1 5001 localhost 2099 MyBootstrap
 ```
 
+## Run 6 Worker Nodes From VS Code
+
+Open the project folder in VS Code. Use one VS Code terminal for the Bootstrap Node and six separate VS Code terminals for the six Worker Node processes.
+
+Step 1: Open a VS Code terminal with `Terminal > New Terminal`.
+
+Step 2: Compile the backend:
+
+```powershell
+.\Backend\scripts\compile.ps1
+```
+
+If PowerShell blocks scripts on your machine, run the compile command directly instead:
+
+```powershell
+javac -d Backend/out (Get-ChildItem -Recurse Backend/src/main/java -Filter *.java).FullName
+```
+
+Step 3: In terminal 1, start the Bootstrap Node:
+
+```powershell
+.\Backend\scripts\start-bootstrap.ps1
+```
+
+Or run it directly:
+
+```powershell
+java -cp Backend/out cs324.bootstrap.BootstrapServer
+```
+
+Step 4: Open six more VS Code terminals. In each terminal, start exactly one worker:
+
+Terminal 2:
+
+```powershell
+.\Backend\scripts\start-worker-1.ps1
+```
+
+Terminal 3:
+
+```powershell
+.\Backend\scripts\start-worker-2.ps1
+```
+
+Terminal 4:
+
+```powershell
+.\Backend\scripts\start-worker-3.ps1
+```
+
+Terminal 5:
+
+```powershell
+.\Backend\scripts\start-worker-4.ps1
+```
+
+Terminal 6:
+
+```powershell
+.\Backend\scripts\start-worker-5.ps1
+```
+
+Terminal 7:
+
+```powershell
+.\Backend\scripts\start-worker-6.ps1
+```
+
+The six workers use these fixed IDs and RMI ports:
+
+```text
+Worker 1 -> port 5001
+Worker 2 -> port 5002
+Worker 3 -> port 5003
+Worker 4 -> port 5004
+Worker 5 -> port 5005
+Worker 6 -> port 5006
+```
+
+Each worker runs independently in its own Java process. When workers 2 through 6 start, each one asks the Bootstrap Node for a random active worker and creates a bidirectional neighbour connection using Java RMI.
+
+To inspect any worker, use:
+
+```powershell
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5001 1
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5002 2
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5003 3
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5004 4
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5005 5
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5006 6
+```
+
 ## Test Bootstrap Node
 
 Leave the server running in one terminal, then open another terminal and run:
