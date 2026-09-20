@@ -1,0 +1,19 @@
+package cs324.worker;
+
+import cs324.bootstrap.WorkerInfo;
+
+import java.rmi.Remote;
+import java.rmi.RemoteException;
+import java.util.List;
+
+public interface WorkerService extends Remote {
+    int getWorkerId() throws RemoteException;
+
+    int getJobAllocationCounter() throws RemoteException;
+
+    List<WorkerInfo> getNeighbours() throws RemoteException;
+
+    int getCurrentCoordinatorId() throws RemoteException;
+
+    String getLeaderman() throws RemoteException;
+}
