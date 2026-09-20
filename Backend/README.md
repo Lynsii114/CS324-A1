@@ -175,29 +175,67 @@ java -cp Backend/out cs324.worker.WorkerTestClient localhost 5006 6
 
 ## Test Leader Election
 
-Start the Bootstrap Node and at least two Worker Nodes.
+Start the Bootstrap Node and all six Worker Nodes using the steps in `Run 6 Worker Nodes From VS Code`.
 
-Mark a worker as having no coordinator:
+In each worker terminal, you should see startup output showing:
 
-```powershell
-java -cp Backend/out cs324.worker.WorkerTestClient localhost 5001 1 no-coordinator
-```
+- worker ID
+- RMI port
+- JAC value
+- current coordinator ID
+- Bootstrap registration
+- selected neighbour, if one was available
+- neighbour connection updates
 
-Start an election from that worker:
+In the Bootstrap terminal, you should see `REGISTER`, `UNREGISTER`, and random-worker selection messages.
 
-```powershell
-java -cp Backend/out cs324.worker.WorkerTestClient localhost 5001 1 election
-```
-
-Inspect workers after the election:
+After all six workers are running, inspect their state from another VS Code terminal:
 
 ```powershell
 java -cp Backend/out cs324.worker.WorkerTestClient localhost 5001 1
 java -cp Backend/out cs324.worker.WorkerTestClient localhost 5002 2
 java -cp Backend/out cs324.worker.WorkerTestClient localhost 5003 3
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5004 4
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5005 5
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5006 6
 ```
 
-Each reachable worker should show the same coordinator ID and the same processed election ID.
+Mark worker `1` as having no coordinator:
+
+```powershell
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5001 1 no-coordinator
+```
+
+Start an election from worker `1`:
+
+```powershell
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5001 1 election
+```
+
+Watch the worker terminals. You should see:
+
+- `ELECTION start` in worker `1`
+- `ELECTION received` messages in reachable workers
+- worker IDs and JAC values printed with each election message
+- `ELECTION forward` messages as the election moves through neighbours
+- duplicate `ELECTION` messages ignored if the network has cycles
+- `ELECTION selected coordinatorId=... candidates=...`
+- `COORDINATOR selected`, `COORDINATOR send`, and `COORDINATOR received` messages
+
+Because computational jobs are not implemented yet, all workers still have `JAC=0`. With equal JAC values, the tie-breaker elects the reachable worker with the highest worker ID. If all six workers are reachable, worker `6` should become coordinator.
+
+Inspect all six workers after the election:
+
+```powershell
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5001 1
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5002 2
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5003 3
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5004 4
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5005 5
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5006 6
+```
+
+Each reachable worker should show the same coordinator ID and the same processed election ID. With all six workers reachable and `JAC=0`, the coordinator ID should be `6`.
 
 ## Test Bootstrap Node
 

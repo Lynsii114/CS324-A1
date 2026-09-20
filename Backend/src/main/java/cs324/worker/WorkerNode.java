@@ -62,12 +62,25 @@ public class WorkerNode extends UnicastRemoteObject implements WorkerService {
         }
 
         neighbours.add(worker);
+        log("NEIGHBOUR added workerId=%d host=%s port=%d neighbours=%s",
+                worker.getId(),
+                worker.getHost(),
+                worker.getPort(),
+                neighbours);
     }
 
     @Override
     public ElectionResult startElection() throws java.rmi.RemoteException {
         String electionId = workerId + "-" + UUID.randomUUID();
+        log("ELECTION start electionId=%s workerId=%d JAC=%d neighbours=%s",
+                electionId,
+                workerId,
+                jobAllocationCounter.get(),
+                neighbours);
         ElectionResult result = receiveElection(electionId, selfInfo);
+        log("ELECTION selected coordinatorId=%d candidates=%s",
+                result.getCoordinatorId(),
+                result.getReachableCandidates());
         announceCoordinator(electionId, result.getCoordinatorId());
         return result;
     }
@@ -79,18 +92,33 @@ public class WorkerNode extends UnicastRemoteObject implements WorkerService {
         }
 
         if (!processedElectionIds.add(electionId)) {
+            log("ELECTION duplicate ignored electionId=%s sender=%s",
+                    electionId,
+                    formatWorker(sender));
             return new ElectionResult(electionId, -1, List.of());
         }
+
+        log("ELECTION received electionId=%s sender=%s workerId=%d JAC=%d",
+                electionId,
+                formatWorker(sender),
+                workerId,
+                jobAllocationCounter.get());
 
         Set<ElectionCandidate> reachableCandidates = new HashSet<>();
         reachableCandidates.add(new ElectionCandidate(selfInfo, jobAllocationCounter.get()));
 
         for (WorkerInfo neighbourInfo : neighbours) {
             if (sender != null && neighbourInfo.getId() == sender.getId()) {
+                log("ELECTION skip sender workerId=%d electionId=%s",
+                        neighbourInfo.getId(),
+                        electionId);
                 continue;
             }
 
             try {
+                log("ELECTION forward electionId=%s to workerId=%d",
+                        electionId,
+                        neighbourInfo.getId());
                 WorkerService neighbour = lookupWorker(neighbourInfo);
                 ElectionResult neighbourResult = neighbour.receiveElection(electionId, selfInfo);
                 reachableCandidates.addAll(neighbourResult.getReachableCandidates());
@@ -109,6 +137,10 @@ public class WorkerNode extends UnicastRemoteObject implements WorkerService {
                 .map(ElectionCandidate::getWorkerId)
                 .orElse(workerId);
 
+        log("ELECTION local result electionId=%s selectedCoordinator=%d candidates=%s",
+                electionId,
+                coordinatorId,
+                reachableCandidates);
         return new ElectionResult(electionId, coordinatorId, new ArrayList<>(reachableCandidates));
     }
 
@@ -120,9 +152,14 @@ public class WorkerNode extends UnicastRemoteObject implements WorkerService {
 
         currentCoordinatorId = coordinatorId;
         processedCoordinatorAnnouncementIds.add(electionId);
+        log("COORDINATOR selected electionId=%s coordinatorId=%d", electionId, coordinatorId);
 
         for (WorkerInfo neighbourInfo : neighbours) {
             try {
+                log("COORDINATOR send electionId=%s coordinatorId=%d to workerId=%d",
+                        electionId,
+                        coordinatorId,
+                        neighbourInfo.getId());
                 WorkerService neighbour = lookupWorker(neighbourInfo);
                 neighbour.receiveCoordinatorAnnouncement(electionId, coordinatorId, selfInfo);
             } catch (Exception exception) {
@@ -138,6 +175,7 @@ public class WorkerNode extends UnicastRemoteObject implements WorkerService {
     @Override
     public void markCoordinatorUnavailable() {
         currentCoordinatorId = -1;
+        log("COORDINATOR unavailable currentCoordinatorId=-1");
     }
 
     @Override
@@ -158,17 +196,31 @@ public class WorkerNode extends UnicastRemoteObject implements WorkerService {
     @Override
     public void receiveCoordinatorAnnouncement(String electionId, int coordinatorId, WorkerInfo sender) {
         if (!processedCoordinatorAnnouncementIds.add(electionId)) {
+            log("COORDINATOR duplicate ignored electionId=%s sender=%s",
+                    electionId,
+                    formatWorker(sender));
             return;
         }
 
         currentCoordinatorId = coordinatorId;
+        log("COORDINATOR received electionId=%s coordinatorId=%d sender=%s",
+                electionId,
+                coordinatorId,
+                formatWorker(sender));
 
         for (WorkerInfo neighbourInfo : neighbours) {
             if (sender != null && neighbourInfo.getId() == sender.getId()) {
+                log("COORDINATOR skip sender workerId=%d electionId=%s",
+                        neighbourInfo.getId(),
+                        electionId);
                 continue;
             }
 
             try {
+                log("COORDINATOR forward electionId=%s coordinatorId=%d to workerId=%d",
+                        electionId,
+                        coordinatorId,
+                        neighbourInfo.getId());
                 WorkerService neighbour = lookupWorker(neighbourInfo);
                 neighbour.receiveCoordinatorAnnouncement(electionId, coordinatorId, selfInfo);
             } catch (Exception exception) {
@@ -183,6 +235,21 @@ public class WorkerNode extends UnicastRemoteObject implements WorkerService {
     private static WorkerService lookupWorker(WorkerInfo workerInfo) throws Exception {
         Registry registry = LocateRegistry.getRegistry(workerInfo.getHost(), workerInfo.getPort());
         return (WorkerService) registry.lookup("Worker-" + workerInfo.getId());
+    }
+
+    private void log(String message, Object... args) {
+        System.out.printf("[WORKER %d] %s%n", workerId, String.format(message, args));
+    }
+
+    private static String formatWorker(WorkerInfo workerInfo) {
+        if (workerInfo == null) {
+            return "none";
+        }
+
+        return String.format("workerId=%d host=%s port=%d",
+                workerInfo.getId(),
+                workerInfo.getHost(),
+                workerInfo.getPort());
     }
 
     public static void main(String[] args) throws Exception {
@@ -201,19 +268,40 @@ public class WorkerNode extends UnicastRemoteObject implements WorkerService {
         WorkerNode workerNode = new WorkerNode(workerId, "localhost", workerPort);
         Registry workerRegistry = LocateRegistry.createRegistry(workerPort);
         workerRegistry.rebind(workerBindingName, workerNode);
+        workerNode.log("START workerId=%d rmiUrl=rmi://localhost:%d/%s JAC=%d coordinatorId=%d leaderman=%s",
+                workerId,
+                workerPort,
+                workerBindingName,
+                workerNode.getJobAllocationCounter(),
+                workerNode.getCurrentCoordinatorId(),
+                workerNode.getLeaderman());
 
         Registry bootstrapRegistry = LocateRegistry.getRegistry(bootstrapHost, bootstrapPort);
         BootstrapService bootstrap = (BootstrapService) bootstrapRegistry.lookup(bootstrapBindingName);
+        workerNode.log("BOOTSTRAP connected rmi://%s:%d/%s",
+                bootstrapHost,
+                bootstrapPort,
+                bootstrapBindingName);
 
         WorkerInfo workerInfo = new WorkerInfo(workerId, "localhost", workerPort);
         WorkerInfo neighbourInfo = bootstrap.getRandomActiveWorker();
         if (neighbourInfo != null && neighbourInfo.getId() != workerId) {
+            workerNode.log("NEIGHBOUR bootstrap selected %s", formatWorker(neighbourInfo));
             workerNode.addNeighbour(neighbourInfo);
 
             WorkerService neighbour = lookupWorker(neighbourInfo);
+            workerNode.log("NEIGHBOUR notifying workerId=%d to add workerId=%d",
+                    neighbourInfo.getId(),
+                    workerId);
             neighbour.addNeighbour(workerInfo);
+        } else {
+            workerNode.log("NEIGHBOUR none available from bootstrap");
         }
 
+        workerNode.log("REGISTER sending to bootstrap workerId=%d host=%s port=%d",
+                workerInfo.getId(),
+                workerInfo.getHost(),
+                workerInfo.getPort());
         bootstrap.registerWorker(workerInfo);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
