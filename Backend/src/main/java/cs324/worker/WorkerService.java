@@ -23,6 +23,12 @@ public interface WorkerService extends Remote {
 
     void receiveCoordinatorAnnouncement(String electionId, int coordinatorId, WorkerInfo sender) throws RemoteException;
 
+    List<WorkerInfo> collectReachableWorkers(String traversalId, WorkerInfo sender) throws RemoteException;
+
+    int submitMaxJob(List<Integer> numbers) throws RemoteException;
+
+    int calculatePartialMax(List<Integer> numbers) throws RemoteException;
+
     void markCoordinatorUnavailable() throws RemoteException;
 
     List<String> getProcessedElectionIds() throws RemoteException;

@@ -26,6 +26,7 @@ public class WorkerNode extends UnicastRemoteObject implements WorkerService {
     private final CopyOnWriteArrayList<WorkerInfo> neighbours = new CopyOnWriteArrayList<>();
     private final Set<String> processedElectionIds = ConcurrentHashMap.newKeySet();
     private final Set<String> processedCoordinatorAnnouncementIds = ConcurrentHashMap.newKeySet();
+    private final Set<String> processedWorkerTraversalIds = ConcurrentHashMap.newKeySet();
     private volatile int currentCoordinatorId;
     private final String leaderman = "cs324";
 
@@ -230,6 +231,135 @@ public class WorkerNode extends UnicastRemoteObject implements WorkerService {
                         exception.getMessage());
             }
         }
+    }
+
+    @Override
+    public List<WorkerInfo> collectReachableWorkers(String traversalId, WorkerInfo sender) {
+        if (traversalId == null || traversalId.isBlank()) {
+            throw new IllegalArgumentException("Traversal id must not be blank");
+        }
+
+        if (!processedWorkerTraversalIds.add(traversalId)) {
+            log("MAX traversal duplicate ignored traversalId=%s sender=%s",
+                    traversalId,
+                    formatWorker(sender));
+            return List.of();
+        }
+
+        log("MAX traversal received traversalId=%s sender=%s",
+                traversalId,
+                formatWorker(sender));
+
+        Set<WorkerInfo> reachableWorkers = new HashSet<>();
+        reachableWorkers.add(selfInfo);
+
+        for (WorkerInfo neighbourInfo : neighbours) {
+            if (sender != null && neighbourInfo.getId() == sender.getId()) {
+                log("MAX traversal skip sender workerId=%d traversalId=%s",
+                        neighbourInfo.getId(),
+                        traversalId);
+                continue;
+            }
+
+            try {
+                log("MAX traversal forward traversalId=%s to workerId=%d",
+                        traversalId,
+                        neighbourInfo.getId());
+                WorkerService neighbour = lookupWorker(neighbourInfo);
+                reachableWorkers.addAll(neighbour.collectReachableWorkers(traversalId, selfInfo));
+            } catch (Exception exception) {
+                System.err.printf("Worker %d could not collect reachable worker %d for MAX job: %s%n",
+                        workerId,
+                        neighbourInfo.getId(),
+                        exception.getMessage());
+            }
+        }
+
+        log("MAX traversal result traversalId=%s reachableWorkers=%s",
+                traversalId,
+                reachableWorkers);
+        return new ArrayList<>(reachableWorkers);
+    }
+
+    @Override
+    public int submitMaxJob(List<Integer> numbers) throws java.rmi.RemoteException {
+        if (numbers == null || numbers.isEmpty()) {
+            throw new IllegalArgumentException("MAX job requires at least one number");
+        }
+        if (currentCoordinatorId != workerId) {
+            throw new IllegalStateException("Worker " + workerId + " is not coordinator; current coordinator is " + currentCoordinatorId);
+        }
+
+        String jobId = "MAX-" + workerId + "-" + UUID.randomUUID();
+        log("MAX job received jobId=%s coordinatorId=%d numbers=%s",
+                jobId,
+                workerId,
+                numbers);
+
+        List<WorkerInfo> reachableWorkers = collectReachableWorkers(jobId, selfInfo).stream()
+                .sorted(Comparator.comparingInt(WorkerInfo::getId))
+                .toList();
+        if (reachableWorkers.isEmpty()) {
+            reachableWorkers = List.of(selfInfo);
+        }
+
+        int workerCount = Math.min(reachableWorkers.size(), numbers.size());
+        List<WorkerInfo> assignedWorkers = reachableWorkers.subList(0, workerCount);
+        log("MAX jobId=%s reachableWorkers=%s assignedWorkers=%s",
+                jobId,
+                reachableWorkers,
+                assignedWorkers);
+
+        int finalMax = Integer.MIN_VALUE;
+        int start = 0;
+        for (int index = 0; index < assignedWorkers.size(); index++) {
+            int remainingNumbers = numbers.size() - start;
+            int remainingWorkers = assignedWorkers.size() - index;
+            int chunkSize = (int) Math.ceil((double) remainingNumbers / remainingWorkers);
+            int end = start + chunkSize;
+            List<Integer> chunk = List.copyOf(numbers.subList(start, end));
+            WorkerInfo assignedWorker = assignedWorkers.get(index);
+
+            try {
+                log("MAX assign jobId=%s workerId=%d chunk=%s",
+                        jobId,
+                        assignedWorker.getId(),
+                        chunk);
+                WorkerService worker = assignedWorker.getId() == workerId ? this : lookupWorker(assignedWorker);
+                int partialMax = worker.calculatePartialMax(chunk);
+                log("MAX partial jobId=%s workerId=%d partialMax=%d",
+                        jobId,
+                        assignedWorker.getId(),
+                        partialMax);
+                finalMax = Math.max(finalMax, partialMax);
+            } catch (Exception exception) {
+                throw new java.rmi.RemoteException("MAX job failed on worker " + assignedWorker.getId(), exception);
+            }
+
+            start = end;
+        }
+
+        log("MAX final jobId=%s finalMax=%d", jobId, finalMax);
+        return finalMax;
+    }
+
+    @Override
+    public int calculatePartialMax(List<Integer> numbers) {
+        if (numbers == null || numbers.isEmpty()) {
+            throw new IllegalArgumentException("Partial MAX requires at least one number");
+        }
+
+        int jac = jobAllocationCounter.incrementAndGet();
+        int partialMax = numbers.stream()
+                .mapToInt(Integer::intValue)
+                .max()
+                .orElseThrow();
+        log("MAX partial computed workerId=%d JAC=%d chunk=%s partialMax=%d",
+                workerId,
+                jac,
+                numbers,
+                partialMax);
+        return partialMax;
     }
 
     private static WorkerService lookupWorker(WorkerInfo workerInfo) throws Exception {

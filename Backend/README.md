@@ -222,7 +222,7 @@ Watch the worker terminals. You should see:
 - `ELECTION selected coordinatorId=... candidates=...`
 - `COORDINATOR selected`, `COORDINATOR send`, and `COORDINATOR received` messages
 
-Because computational jobs are not implemented yet, all workers still have `JAC=0`. With equal JAC values, the tie-breaker elects the reachable worker with the highest worker ID. If all six workers are reachable, worker `6` should become coordinator.
+Before any MAX jobs run, all workers have `JAC=0`. With equal JAC values, the tie-breaker elects the reachable worker with the highest worker ID. If all six workers are reachable, worker `6` should become coordinator.
 
 Inspect all six workers after the election:
 
@@ -236,6 +236,54 @@ java -cp Backend/out cs324.worker.WorkerTestClient localhost 5006 6
 ```
 
 Each reachable worker should show the same coordinator ID and the same processed election ID. With all six workers reachable and `JAC=0`, the coordinator ID should be `6`.
+
+## Test Distributed MAX Job
+
+Start the Bootstrap Node and all six Worker Nodes using the steps in `Run 6 Worker Nodes From VS Code`.
+
+Run an election first so every reachable worker agrees on the coordinator:
+
+```powershell
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5001 1 election
+```
+
+If all six workers are reachable and their JAC values are still tied, worker `6` should be elected coordinator.
+
+Submit a MAX job to the coordinator:
+
+```powershell
+java -cp Backend/out cs324.worker.MaxJobClient localhost 5006 6 7 12 -4 42 5 18 0 31 9 66 23 11
+```
+
+The client sends the whole number list to worker `6`, the coordinator. The coordinator discovers reachable workers, splits the list as evenly as possible, sends each section to a worker over RMI, receives each partial maximum, and returns the final maximum.
+
+Expected client output:
+
+```text
+MAX result: 66
+```
+
+Watch the worker terminals. You should see:
+
+- `MAX job received` on the coordinator
+- `MAX traversal` messages while the coordinator finds reachable workers
+- `MAX assign` messages showing the section sent to each worker
+- `MAX partial computed` on workers that receive sections
+- `MAX partial` messages on the coordinator
+- `MAX final` with the final maximum
+
+Inspect worker JAC values after the MAX job:
+
+```powershell
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5001 1
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5002 2
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5003 3
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5004 4
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5005 5
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5006 6
+```
+
+Workers that processed a MAX section should have an increased JAC.
 
 ## Test Bootstrap Node
 
