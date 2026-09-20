@@ -24,11 +24,21 @@ public class BootstrapNode extends UnicastRemoteObject implements BootstrapServi
         }
 
         activeWorkers.put(worker.getId(), worker);
+        System.out.printf("[BOOTSTRAP] REGISTER workerId=%d host=%s port=%d activeWorkers=%s%n",
+                worker.getId(),
+                worker.getHost(),
+                worker.getPort(),
+                getActiveWorkers());
     }
 
     @Override
     public boolean unregisterWorker(int workerId) throws RemoteException {
-        return activeWorkers.remove(workerId) != null;
+        boolean removed = activeWorkers.remove(workerId) != null;
+        System.out.printf("[BOOTSTRAP] UNREGISTER workerId=%d removed=%s activeWorkers=%s%n",
+                workerId,
+                removed,
+                getActiveWorkers());
+        return removed;
     }
 
     @Override
@@ -40,9 +50,14 @@ public class BootstrapNode extends UnicastRemoteObject implements BootstrapServi
     public WorkerInfo getRandomActiveWorker() throws RemoteException {
         List<WorkerInfo> snapshot = new ArrayList<>(activeWorkers.values());
         if (snapshot.isEmpty()) {
+            System.out.println("[BOOTSTRAP] RANDOM request -> no active workers");
             return null;
         }
 
-        return snapshot.get(ThreadLocalRandom.current().nextInt(snapshot.size()));
+        WorkerInfo selected = snapshot.get(ThreadLocalRandom.current().nextInt(snapshot.size()));
+        System.out.printf("[BOOTSTRAP] RANDOM request -> workerId=%d from activeWorkers=%s%n",
+                selected.getId(),
+                snapshot);
+        return selected;
     }
 }

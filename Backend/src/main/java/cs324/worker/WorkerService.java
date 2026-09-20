@@ -13,6 +13,26 @@ public interface WorkerService extends Remote {
 
     List<WorkerInfo> getNeighbours() throws RemoteException;
 
+    void addNeighbour(WorkerInfo worker) throws RemoteException;
+
+    ElectionResult startElection() throws RemoteException;
+
+    ElectionResult receiveElection(String electionId, WorkerInfo sender) throws RemoteException;
+
+    void announceCoordinator(String electionId, int coordinatorId) throws RemoteException;
+
+    void receiveCoordinatorAnnouncement(String electionId, int coordinatorId, WorkerInfo sender) throws RemoteException;
+
+    List<WorkerInfo> collectReachableWorkers(String traversalId, WorkerInfo sender) throws RemoteException;
+
+    int submitMaxJob(List<Integer> numbers) throws RemoteException;
+
+    int calculatePartialMax(List<Integer> numbers) throws RemoteException;
+
+    void markCoordinatorUnavailable() throws RemoteException;
+
+    List<String> getProcessedElectionIds() throws RemoteException;
+
     int getCurrentCoordinatorId() throws RemoteException;
 
     String getLeaderman() throws RemoteException;

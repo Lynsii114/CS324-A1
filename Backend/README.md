@@ -23,7 +23,15 @@ Each Worker Node runs as its own Java process. A worker has:
 - current coordinator ID, initialized to its own worker ID
 - `leaderman`, initialized to `"cs324"`
 
-When a worker starts, it exports itself over RMI and registers with the Bootstrap Node. Leader election is not implemented yet.
+When a worker starts, it exports itself over RMI, asks the Bootstrap Node for a randomly selected active worker, connects to that worker as a neighbour, updates both workers with the neighbour relationship, and then registers itself with the Bootstrap Node.
+
+## Leader Election
+
+Any worker can initiate an election when it has no coordinator. The election uses an `ELECTION` message with a unique election ID generated from the initiator ID and a UUID.
+
+Each worker keeps a thread-safe set of processed election IDs. If the same `ELECTION` message reaches a worker more than once, the worker ignores the duplicate so cycles in the unstructured network do not cause repeated processing.
+
+The `ELECTION` message is forwarded only through direct neighbours. The election considers all reachable active workers in that neighbour network before selecting a winner. The reachable worker with the lowest Job Allocation Counter (JAC) becomes the coordinator. If two or more reachable workers have the same lowest JAC, the worker with the highest worker ID wins. The elected coordinator ID is then announced back through the reachable network.
 
 ## Compile
 
@@ -73,6 +81,210 @@ Example with a custom Bootstrap Node:
 java -cp Backend/out cs324.worker.WorkerNode 1 5001 localhost 2099 MyBootstrap
 ```
 
+## Run 6 Worker Nodes From VS Code
+
+Open the project folder in VS Code. Use one VS Code terminal for the Bootstrap Node and six separate VS Code terminals for the six Worker Node processes.
+
+Step 1: Open a VS Code terminal with `Terminal > New Terminal`.
+
+Step 2: Compile the backend:
+
+```powershell
+.\Backend\scripts\compile.ps1
+```
+
+If PowerShell blocks scripts on your machine, run the compile command directly instead:
+
+```powershell
+javac -d Backend/out (Get-ChildItem -Recurse Backend/src/main/java -Filter *.java).FullName
+```
+
+Step 3: In terminal 1, start the Bootstrap Node:
+
+```powershell
+.\Backend\scripts\start-bootstrap.ps1
+```
+
+Or run it directly:
+
+```powershell
+java -cp Backend/out cs324.bootstrap.BootstrapServer
+```
+
+Step 4: Open six more VS Code terminals. In each terminal, start exactly one worker:
+
+Terminal 2:
+
+```powershell
+.\Backend\scripts\start-worker-1.ps1
+```
+
+Terminal 3:
+
+```powershell
+.\Backend\scripts\start-worker-2.ps1
+```
+
+Terminal 4:
+
+```powershell
+.\Backend\scripts\start-worker-3.ps1
+```
+
+Terminal 5:
+
+```powershell
+.\Backend\scripts\start-worker-4.ps1
+```
+
+Terminal 6:
+
+```powershell
+.\Backend\scripts\start-worker-5.ps1
+```
+
+Terminal 7:
+
+```powershell
+.\Backend\scripts\start-worker-6.ps1
+```
+
+The six workers use these fixed IDs and RMI ports:
+
+```text
+Worker 1 -> port 5001
+Worker 2 -> port 5002
+Worker 3 -> port 5003
+Worker 4 -> port 5004
+Worker 5 -> port 5005
+Worker 6 -> port 5006
+```
+
+Each worker runs independently in its own Java process. When workers 2 through 6 start, each one asks the Bootstrap Node for a random active worker and creates a bidirectional neighbour connection using Java RMI.
+
+To inspect any worker, use:
+
+```powershell
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5001 1
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5002 2
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5003 3
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5004 4
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5005 5
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5006 6
+```
+
+## Test Leader Election
+
+Start the Bootstrap Node and all six Worker Nodes using the steps in `Run 6 Worker Nodes From VS Code`.
+
+In each worker terminal, you should see startup output showing:
+
+- worker ID
+- RMI port
+- JAC value
+- current coordinator ID
+- Bootstrap registration
+- selected neighbour, if one was available
+- neighbour connection updates
+
+In the Bootstrap terminal, you should see `REGISTER`, `UNREGISTER`, and random-worker selection messages.
+
+After all six workers are running, inspect their state from another VS Code terminal:
+
+```powershell
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5001 1
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5002 2
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5003 3
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5004 4
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5005 5
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5006 6
+```
+
+Mark worker `1` as having no coordinator:
+
+```powershell
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5001 1 no-coordinator
+```
+
+Start an election from worker `1`:
+
+```powershell
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5001 1 election
+```
+
+Watch the worker terminals. You should see:
+
+- `ELECTION start` in worker `1`
+- `ELECTION received` messages in reachable workers
+- worker IDs and JAC values printed with each election message
+- `ELECTION forward` messages as the election moves through neighbours
+- duplicate `ELECTION` messages ignored if the network has cycles
+- `ELECTION selected coordinatorId=... candidates=...`
+- `COORDINATOR selected`, `COORDINATOR send`, and `COORDINATOR received` messages
+
+Before any MAX jobs run, all workers have `JAC=0`. With equal JAC values, the tie-breaker elects the reachable worker with the highest worker ID. If all six workers are reachable, worker `6` should become coordinator.
+
+Inspect all six workers after the election:
+
+```powershell
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5001 1
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5002 2
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5003 3
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5004 4
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5005 5
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5006 6
+```
+
+Each reachable worker should show the same coordinator ID and the same processed election ID. With all six workers reachable and `JAC=0`, the coordinator ID should be `6`.
+
+## Test Distributed MAX Job
+
+Start the Bootstrap Node and all six Worker Nodes using the steps in `Run 6 Worker Nodes From VS Code`.
+
+Run an election first so every reachable worker agrees on the coordinator:
+
+```powershell
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5001 1 election
+```
+
+If all six workers are reachable and their JAC values are still tied, worker `6` should be elected coordinator.
+
+Submit a MAX job to the coordinator:
+
+```powershell
+java -cp Backend/out cs324.worker.MaxJobClient localhost 5006 6 7 12 -4 42 5 18 0 31 9 66 23 11
+```
+
+The client sends the whole number list to worker `6`, the coordinator. The coordinator discovers reachable workers, splits the list as evenly as possible, sends each section to a worker over RMI, receives each partial maximum, and returns the final maximum.
+
+Expected client output:
+
+```text
+MAX result: 66
+```
+
+Watch the worker terminals. You should see:
+
+- `MAX job received` on the coordinator
+- `MAX traversal` messages while the coordinator finds reachable workers
+- `MAX assign` messages showing the section sent to each worker
+- `MAX partial computed` on workers that receive sections
+- `MAX partial` messages on the coordinator
+- `MAX final` with the final maximum
+
+Inspect worker JAC values after the MAX job:
+
+```powershell
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5001 1
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5002 2
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5003 3
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5004 4
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5005 5
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5006 6
+```
+
+Workers that processed a MAX section should have an increased JAC.
+
 ## Test Bootstrap Node
 
 Leave the server running in one terminal, then open another terminal and run:
@@ -109,4 +321,19 @@ Inspect that worker from a third terminal:
 java -cp Backend/out cs324.worker.WorkerTestClient localhost 5001 1
 ```
 
-You should see the worker ID, `JAC` as `0`, an empty neighbour list, the current coordinator ID, and `leaderman` as `cs324`.
+You should see the worker ID, `JAC` as `0`, its neighbour list, the current coordinator ID, and `leaderman` as `cs324`.
+
+To test neighbour creation, run a second worker while the first worker is still running:
+
+```powershell
+java -cp Backend/out cs324.worker.WorkerNode 2 5002
+```
+
+Then inspect both workers:
+
+```powershell
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5001 1
+java -cp Backend/out cs324.worker.WorkerTestClient localhost 5002 2
+```
+
+Worker `1` should list worker `2` as a neighbour, and worker `2` should list worker `1` as a neighbour. Each worker only stores its own direct neighbours.
